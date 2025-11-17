@@ -1,11 +1,12 @@
 """
 Genetic Algorithm Baseline
-Classic GA with mutation, crossover, and selection
+Classic GA with mutation, crossover, and selection with validation
 """
 
 import random
 from typing import Dict, List, Tuple
 from evaluator.affinity_model import MultiDiseaseAffinityEvaluator
+from utils.validation import validate_sequence, VALID_AMINO_ACIDS
 
 
 class GeneticAlgorithmBaseline:
@@ -14,7 +15,6 @@ class GeneticAlgorithmBaseline:
     def __init__(
         self,
         evaluator: MultiDiseaseAffinityEvaluator,
-        antigens: List[str],
         population_size: int = 20,
         generations: int = 10,
         mutation_rate: float = 0.1,
@@ -24,22 +24,21 @@ class GeneticAlgorithmBaseline:
         Initialize genetic algorithm baseline
         
         Args:
-            evaluator: Multi-disease evaluator
-            antigens: List of target antigens
+            evaluator: Multi-disease evaluator (has antigens internally)
             population_size: Size of population
             generations: Number of generations
             mutation_rate: Probability of mutation per amino acid
             crossover_rate: Probability of crossover
         """
         self.evaluator = evaluator
-        self.antigens = antigens
+        self.antigens = evaluator.antigens
         self.population_size = population_size
         self.generations = generations
         self.mutation_rate = mutation_rate
         self.crossover_rate = crossover_rate
         
         # Valid amino acids
-        self.amino_acids = list('ACDEFGHIKLMNPQRSTVWY')
+        self.amino_acids = list(VALID_AMINO_ACIDS)
     
     def evaluate(self, sequence: str) -> Tuple[Dict[str, float], float]:
         """
@@ -51,13 +50,13 @@ class GeneticAlgorithmBaseline:
         Returns:
             Tuple of (scores_dict, aggregate_score)
         """
-        scores = self.evaluator.evaluate_all_antigens(sequence, self.antigens)
+        scores = self.evaluator.evaluate_all_antigens(sequence)
         agg_score = self.evaluator.aggregate_score(scores)
         return scores, agg_score
     
     def mutate(self, sequence: str) -> str:
         """
-        Apply random mutations
+        Apply random mutations with validation
         
         Args:
             sequence: Input sequence
@@ -71,13 +70,21 @@ class GeneticAlgorithmBaseline:
             if random.random() < self.mutation_rate:
                 current_aa = seq_list[i]
                 possible_aa = [aa for aa in self.amino_acids if aa != current_aa]
-                seq_list[i] = random.choice(possible_aa)
+                if possible_aa:
+                    seq_list[i] = random.choice(possible_aa)
         
-        return ''.join(seq_list)
+        mutated = ''.join(seq_list)
+        
+        # Validate
+        is_valid, _ = validate_sequence(mutated, expected_length=len(sequence), strict=False)
+        if not is_valid:
+            return sequence  # Return original if validation fails
+        
+        return mutated
     
     def crossover(self, parent1: str, parent2: str) -> Tuple[str, str]:
         """
-        Single-point crossover
+        Single-point crossover with validation
         
         Args:
             parent1: First parent sequence
@@ -86,6 +93,9 @@ class GeneticAlgorithmBaseline:
         Returns:
             Tuple of two offspring sequences
         """
+        if len(parent1) != len(parent2):
+            return parent1, parent2
+        
         if random.random() > self.crossover_rate:
             return parent1, parent2
         
@@ -94,6 +104,15 @@ class GeneticAlgorithmBaseline:
         
         offspring1 = parent1[:point] + parent2[point:]
         offspring2 = parent2[:point] + parent1[point:]
+        
+        # Validate offspring
+        is_valid1, _ = validate_sequence(offspring1, expected_length=len(parent1), strict=False)
+        is_valid2, _ = validate_sequence(offspring2, expected_length=len(parent2), strict=False)
+        
+        if not is_valid1:
+            offspring1 = parent1
+        if not is_valid2:
+            offspring2 = parent2
         
         return offspring1, offspring2
     
@@ -151,7 +170,7 @@ class GeneticAlgorithmBaseline:
             print(f"Generation {gen}: Best score = {best_agg:.4f}")
             
             history.append({
-                'generation': gen,
+                'iteration': gen,  # Use 'iteration' for consistency
                 'sequence': best_seq,
                 'scores': best_scores,
                 'aggregate': best_agg
@@ -194,4 +213,3 @@ class GeneticAlgorithmBaseline:
         print(f"\nFinal best score: {best_agg:.4f}")
         
         return best_seq, best_scores, history
-

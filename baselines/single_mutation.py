@@ -1,35 +1,37 @@
 """
 Single Mutation Baseline
-Systematically tries single mutations and keeps the best
+Systematically tries single mutations and keeps the best (hill climbing)
 """
 
 from typing import Dict, List, Tuple
 from evaluator.affinity_model import MultiDiseaseAffinityEvaluator
+from utils.validation import validate_sequence, VALID_AMINO_ACIDS
 
 
 class SingleMutationBaseline:
-    """Single mutation hill climbing baseline"""
+    """Single mutation hill climbing baseline with consistent interface"""
     
     def __init__(
         self,
         evaluator: MultiDiseaseAffinityEvaluator,
-        antigens: List[str],
-        iterations: int = 10
+        iterations: int = 10,
+        sample_size: int = None
     ):
         """
         Initialize single mutation baseline
         
         Args:
-            evaluator: Multi-disease evaluator
-            antigens: List of target antigens
+            evaluator: Multi-disease evaluator (has antigens internally)
             iterations: Number of optimization iterations
+            sample_size: If set, sample this many mutations instead of trying all
         """
         self.evaluator = evaluator
-        self.antigens = antigens
+        self.antigens = evaluator.antigens
         self.iterations = iterations
+        self.sample_size = sample_size
         
         # Valid amino acids
-        self.amino_acids = list('ACDEFGHIKLMNPQRSTVWY')
+        self.amino_acids = list(VALID_AMINO_ACIDS)
     
     def generate_single_mutations(self, sequence: str) -> List[str]:
         """
@@ -50,7 +52,11 @@ class SingleMutationBaseline:
                 if new_aa != current_aa:
                     # Create mutated sequence
                     mutant = sequence[:pos] + new_aa + sequence[pos+1:]
-                    mutations.append(mutant)
+                    
+                    # Validate
+                    is_valid, _ = validate_sequence(mutant, expected_length=len(sequence), strict=False)
+                    if is_valid:
+                        mutations.append(mutant)
         
         return mutations
     
@@ -64,7 +70,7 @@ class SingleMutationBaseline:
         Returns:
             Tuple of (scores_dict, aggregate_score)
         """
-        scores = self.evaluator.evaluate_all_antigens(sequence, self.antigens)
+        scores = self.evaluator.evaluate_all_antigens(sequence)
         agg_score = self.evaluator.aggregate_score(scores)
         return scores, agg_score
     
@@ -81,6 +87,9 @@ class SingleMutationBaseline:
         print(f"\n{'='*60}")
         print("Running Single Mutation Baseline")
         print(f"{'='*60}")
+        print(f"Iterations: {self.iterations}")
+        if self.sample_size:
+            print(f"Sampling: {self.sample_size} mutations per iteration")
         
         # Evaluate seed
         current_sequence = seed_sequence
@@ -102,7 +111,13 @@ class SingleMutationBaseline:
             # Generate all single mutations
             mutations = self.generate_single_mutations(current_sequence)
             
-            print(f"  Generated {len(mutations)} single-point mutations")
+            # Sample if requested
+            if self.sample_size and len(mutations) > self.sample_size:
+                import random
+                mutations = random.sample(mutations, self.sample_size)
+                print(f"  Sampled {len(mutations)} mutations")
+            else:
+                print(f"  Generated {len(mutations)} single-point mutations")
             
             # Find best mutation
             best_mutant = current_sequence
@@ -137,4 +152,3 @@ class SingleMutationBaseline:
         print(f"\nFinal aggregate score: {current_agg:.4f}")
         
         return current_sequence, current_scores, history
-
