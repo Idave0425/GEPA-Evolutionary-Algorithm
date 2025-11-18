@@ -12,14 +12,13 @@ llm:
 
 # Dataset Configuration
 dataset:
-  name: "Exscientia/AbBiBench"
+  name: "AbBibench/Antibody_Binding_Benchmark_Dataset"
   
 # Target Antigens (Diseases)
 # Note: These will be validated against the dataset
 # Invalid antigens will be automatically removed
 antigens:
-  - "HER2"
-  - "VEGF"
+  - "BINDING"
 
 # GEPA Evolution Configuration
 evolution:
